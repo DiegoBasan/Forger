@@ -1,0 +1,1501 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FORGE — Real-Time Shading Engine</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;700;800&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0e10;
+    --panel: #141618;
+    --panel2: #1a1c1f;
+    --border: #2a2d32;
+    --accent: #e8611a;
+    --accent2: #f0a050;
+    --text: #c8cdd4;
+    --text2: #6b7280;
+    --text3: #9ca3af;
+    --green: #3ecf8e;
+    --blue: #4f9cf9;
+    --purple: #a78bfa;
+    --red: #f87171;
+  }
+
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+  }
+
+  /* TOPBAR */
+  #topbar {
+    height: 36px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 20px;
+    flex-shrink: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 15px;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  .logo span { color: var(--text2); font-weight: 400; font-size: 10px; letter-spacing: 2px; margin-left: 8px; }
+
+  .topbar-btns { display: flex; gap: 4px; margin-left: auto; }
+
+  .tb-btn {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text3);
+    padding: 4px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .tb-btn:hover { background: var(--border); color: var(--text); }
+  .tb-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* MAIN LAYOUT */
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* LEFT PANEL */
+  #left-panel {
+    width: 220px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  /* VIEWPORT */
+  #viewport-container {
+    flex: 1;
+    position: relative;
+    background: #080909;
+  }
+
+  #canvas { width: 100%; height: 100%; display: block; }
+
+  .viewport-overlay {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    pointer-events: none;
+  }
+
+  .viewport-tag {
+    background: rgba(20,22,24,0.7);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    padding: 3px 8px;
+    border-radius: 2px;
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    backdrop-filter: blur(4px);
+  }
+
+  .viewport-controls {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    display: flex;
+    gap: 6px;
+  }
+
+  .vp-btn {
+    background: rgba(20,22,24,0.8);
+    border: 1px solid var(--border);
+    color: var(--text3);
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    backdrop-filter: blur(4px);
+  }
+  .vp-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .vp-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* RIGHT PANEL */
+  #right-panel {
+    width: 260px;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  /* PANEL SECTIONS */
+  .section {
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    user-select: none;
+    gap: 6px;
+    background: var(--panel2);
+  }
+  .section-header:hover { background: #1f2124; }
+
+  .section-arrow {
+    color: var(--text2);
+    font-size: 8px;
+    transition: transform 0.2s;
+  }
+  .section-arrow.open { transform: rotate(90deg); }
+
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text3);
+  }
+
+  .section-body {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .section-body.collapsed { display: none; }
+
+  /* CONTROLS */
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ctrl-label {
+    color: var(--text2);
+    font-size: 10px;
+    min-width: 72px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .ctrl-value {
+    color: var(--accent2);
+    font-size: 10px;
+    min-width: 32px;
+    text-align: right;
+  }
+
+  input[type="range"] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+
+  input[type="color"] {
+    width: 36px;
+    height: 20px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px;
+    background: var(--panel2);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .select-ctrl {
+    flex: 1;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+  }
+  .select-ctrl:focus { border-color: var(--accent); }
+
+  /* LIGHT ITEMS */
+  .light-item {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    position: relative;
+  }
+
+  .light-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .light-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .light-name {
+    flex: 1;
+    font-size: 10px;
+    color: var(--text);
+  }
+
+  .light-del {
+    background: none;
+    border: none;
+    color: var(--text2);
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    padding: 0 2px;
+  }
+  .light-del:hover { color: var(--red); }
+
+  /* ADD LIGHT BTN */
+  .add-btn {
+    background: none;
+    border: 1px dashed var(--border);
+    color: var(--text2);
+    padding: 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    width: 100%;
+    transition: all 0.15s;
+  }
+  .add-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* IMPORT ZONE */
+  #import-zone {
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    padding: 14px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin: 10px 12px;
+  }
+  #import-zone:hover, #import-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(232,97,26,0.05);
+  }
+  #import-zone .import-icon { font-size: 22px; margin-bottom: 6px; }
+  #import-zone .import-text { color: var(--text2); font-size: 10px; line-height: 1.6; }
+  #import-zone .import-ext { color: var(--accent); font-size: 9px; margin-top: 3px; }
+
+  /* VIEWPORT RENDER MODES */
+  .mode-btns {
+    display: flex;
+    gap: 4px;
+    padding: 10px 12px;
+  }
+
+  .mode-btn {
+    flex: 1;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    padding: 5px 4px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: center;
+    transition: all 0.15s;
+  }
+  .mode-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .mode-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* STATS */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .stat-card {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 7px 10px;
+  }
+
+  .stat-label { color: var(--text2); font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-val { color: var(--green); font-size: 13px; font-weight: 700; margin-top: 2px; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* LOADING */
+  #loading {
+    position: absolute;
+    inset: 0;
+    background: rgba(8,9,9,0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    gap: 12px;
+  }
+
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text { color: var(--text2); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; }
+
+  /* NORMAL MAP INDICATOR */
+  .channel-indicators {
+    display: flex;
+    gap: 4px;
+    padding: 6px 12px;
+  }
+  .channel-tag {
+    padding: 2px 7px;
+    border-radius: 2px;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+  .channel-tag.color { background: rgba(79,156,249,0.15); border-color: rgba(79,156,249,0.3); color: var(--blue); }
+  .channel-tag.normal { background: rgba(167,139,250,0.15); border-color: rgba(167,139,250,0.3); color: var(--purple); }
+  .channel-tag.rough { background: rgba(240,160,80,0.15); border-color: rgba(240,160,80,0.3); color: var(--accent2); }
+  .channel-tag.metal { background: rgba(62,207,142,0.15); border-color: rgba(62,207,142,0.3); color: var(--green); }
+  .channel-tag.active { opacity: 1; }
+  .channel-tag:not(.active) { opacity: 0.4; }
+
+  #file-input { display: none; }
+
+  /* TOOLTIP */
+  .tooltip {
+    position: absolute;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 9px;
+    pointer-events: none;
+    z-index: 200;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  /* ENV background toggle */
+  .env-preview {
+    width: 100%;
+    height: 40px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: border-color 0.15s;
+    margin-top: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .checkbox-ctrl {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+  .checkbox-ctrl input { accent-color: var(--accent); width: 13px; height: 13px; }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <div class="logo">FORGE <span>// SHADING ENGINE v1.0</span></div>
+  <div class="topbar-btns">
+    <button class="tb-btn active" id="btn-eevee">EEVEE RT</button>
+    <button class="tb-btn" id="btn-solid">SOLID</button>
+    <button class="tb-btn" id="btn-wire">WIREFRAME</button>
+  </div>
+</div>
+
+<div id="main">
+
+  <!-- LEFT PANEL -->
+  <div id="left-panel">
+
+    <!-- IMPORT -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        <span class="section-arrow open">▶</span>
+        <span class="section-title">Import Model</span>
+      </div>
+      <div class="section-body">
+        <div id="import-zone" onclick="document.getElementById('file-input').click()">
+          <div class="import-icon">⬆</div>
+          <div class="import-text">Drop file or click<br>to import model</div>
+          <div class="import-ext">OBJ · STL · GLTF · GLB · PLY</div>
+        </div>
+        <input type="file" id="file-input" accept=".obj,.stl,.gltf,.glb,.ply">
+      </div>
+    </div>
+
+    <!-- RENDER MODE -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        <span class="section-arrow open">▶</span>
+        <span class="section-title">Render Channels</span>
+      </div>
+      <div class="section-body" style="padding-top:4px;">
+        <div class="channel-indicators">
+          <div class="channel-tag color active" id="ch-color" onclick="setChannel('color')">Color</div>
+          <div class="channel-tag normal" id="ch-normal" onclick="setChannel('normal')">Normal</div>
+          <div class="channel-tag rough" id="ch-rough" onclick="setChannel('rough')">Rough</div>
+          <div class="channel-tag metal" id="ch-metal" onclick="setChannel('metal')">Metal</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MATERIAL -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        <span class="section-arrow open">▶</span>
+        <span class="section-title">Material — PBR</span>
+      </div>
+      <div class="section-body">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Base Color</span>
+          <input type="color" id="mat-color" value="#b07040">
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Roughness</span>
+          <input type="range" id="mat-rough" min="0" max="100" value="50">
+          <span class="ctrl-value" id="val-rough">0.50</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Metalness</span>
+          <input type="range" id="mat-metal" min="0" max="100" value="0">
+          <span class="ctrl-value" id="val-metal">0.00</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Emission</span>
+          <input type="color" id="mat-emit" value="#000000">
+          <input type="range" id="mat-emit-int" min="0" max="500" value="0" style="flex:1">
+          <span class="ctrl-value" id="val-emit">0.0</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Wire Opacity</span>
+          <input type="range" id="mat-wire" min="0" max="100" value="0">
+          <span class="ctrl-value" id="val-wire">0.00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        <span class="section-arrow open">▶</span>
+        <span class="section-title">Scene</span>
+      </div>
+      <div class="section-body">
+        <div class="ctrl-row">
+          <span class="ctrl-label">BG Color</span>
+          <input type="color" id="bg-color" value="#0d0e10">
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Ambient Int.</span>
+          <input type="range" id="amb-int" min="0" max="200" value="15">
+          <span class="ctrl-value" id="val-amb">0.15</span>
+        </div>
+        <div class="ctrl-row checkbox-ctrl">
+          <input type="checkbox" id="show-grid" checked>
+          <label for="show-grid" style="color:var(--text2);cursor:pointer;">Show Grid</label>
+        </div>
+        <div class="ctrl-row checkbox-ctrl">
+          <input type="checkbox" id="show-env" checked>
+          <label for="show-env" style="color:var(--text2);cursor:pointer;">Env. IBL</label>
+        </div>
+        <div class="ctrl-row checkbox-ctrl">
+          <input type="checkbox" id="show-shadow" checked>
+          <label for="show-shadow" style="color:var(--text2);cursor:pointer;">Shadows</label>
+        </div>
+        <div class="ctrl-row checkbox-ctrl">
+          <input type="checkbox" id="show-bloom" >
+          <label for="show-bloom" style="color:var(--text2);cursor:pointer;">Bloom (Emission)</label>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Tone Map</span>
+          <select id="tonemap" class="select-ctrl">
+            <option value="linear">Linear</option>
+            <option value="reinhard">Reinhard</option>
+            <option value="cineon">Filmic</option>
+            <option value="aces">ACES</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        <span class="section-arrow open">▶</span>
+        <span class="section-title">Viewport Stats</span>
+      </div>
+      <div class="section-body">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">FPS</div>
+            <div class="stat-val" id="stat-fps">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Triangles</div>
+            <div class="stat-val" id="stat-tris">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Vertices</div>
+            <div class="stat-val" id="stat-verts">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Lights</div>
+            <div class="stat-val" id="stat-lights">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- VIEWPORT -->
+  <div id="viewport-container">
+    <canvas id="canvas"></canvas>
+    <div class="viewport-overlay">
+      <div class="viewport-tag" id="vp-mode-tag">EEVEE RT — PBR</div>
+    </div>
+    <div class="viewport-controls">
+      <button class="vp-btn" onclick="resetCamera()" title="Reset Camera">⌂</button>
+      <button class="vp-btn" onclick="toggleOrthographic()" id="ortho-btn" title="Toggle Ortho">□</button>
+      <button class="vp-btn" onclick="focusObject()" title="Focus Object">◎</button>
+    </div>
+    <div id="loading" style="display:none;">
+      <div class="spinner"></div>
+      <div class="loading-text">Loading Model...</div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL — LIGHTS -->
+  <div id="right-panel">
+    <div class="section">
+      <div class="section-header">
+        <span class="section-arrow open">▶</span>
+        <span class="section-title">Lights</span>
+      </div>
+      <div class="section-body" id="lights-container">
+        <!-- Lights injected here -->
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Three.js + Loaders CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ─────────────────────────────────────────────
+// FORGE — Real-Time Shading Engine
+// Three.js r128 based PBR viewer
+// ─────────────────────────────────────────────
+
+const canvas = document.getElementById('canvas');
+let renderer, scene, camera, controls;
+let currentMesh = null;
+let gridHelper = null;
+let lights = [];
+let lightMeshes = [];
+let lightIdCounter = 0;
+let renderMode = 'eevee';
+let displayChannel = 'color';
+let isOrthographic = false;
+let orthoCamera, perspCamera;
+let animId;
+
+// Stats
+let frameCount = 0;
+let lastTime = performance.now();
+
+// ─── RENDERER ───
+renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+
+// ─── SCENE ───
+scene = new THREE.Scene();
+scene.background = new THREE.Color('#0d0e10');
+
+// ─── CAMERA ───
+const W = () => canvas.clientWidth;
+const H = () => canvas.clientHeight;
+
+perspCamera = new THREE.PerspectiveCamera(45, W()/H(), 0.01, 1000);
+perspCamera.position.set(3, 2, 4);
+perspCamera.lookAt(0, 0, 0);
+camera = perspCamera;
+
+// ─── ORBIT CONTROLS (manual) ───
+let isMouseDown = false;
+let isPan = false;
+let lastMouse = { x: 0, y: 0 };
+let camTheta = 0.8, camPhi = 0.5, camRadius = 5;
+let camTarget = new THREE.Vector3(0, 0, 0);
+
+function updateCamera() {
+  const x = camRadius * Math.sin(camPhi) * Math.sin(camTheta);
+  const y = camRadius * Math.cos(camPhi);
+  const z = camRadius * Math.sin(camPhi) * Math.cos(camTheta);
+  camera.position.set(x + camTarget.x, y + camTarget.y, z + camTarget.z);
+  camera.lookAt(camTarget);
+}
+updateCamera();
+
+canvas.addEventListener('mousedown', e => {
+  isMouseDown = true;
+  isPan = e.button === 2 || e.altKey;
+  lastMouse = { x: e.clientX, y: e.clientY };
+});
+window.addEventListener('mouseup', () => isMouseDown = false);
+window.addEventListener('mousemove', e => {
+  if (!isMouseDown) return;
+  const dx = e.clientX - lastMouse.x;
+  const dy = e.clientY - lastMouse.y;
+  lastMouse = { x: e.clientX, y: e.clientY };
+  if (isPan) {
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+    camera.getWorldDirection(up); right.crossVectors(up, camera.up).normalize();
+    const up2 = new THREE.Vector3().crossVectors(right, new THREE.Vector3(0,1,0).negate()).normalize();
+    camTarget.addScaledVector(right, -dx * 0.005 * (camRadius / 5));
+    camTarget.addScaledVector(new THREE.Vector3(0,1,0), dy * 0.005 * (camRadius / 5));
+  } else {
+    camTheta -= dx * 0.008;
+    camPhi = Math.max(0.05, Math.min(Math.PI - 0.05, camPhi + dy * 0.008));
+  }
+  updateCamera();
+});
+canvas.addEventListener('wheel', e => {
+  camRadius = Math.max(0.2, Math.min(200, camRadius + e.deltaY * 0.01 * (camRadius / 5)));
+  updateCamera();
+  e.preventDefault();
+}, { passive: false });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+// ─── GRID ───
+function buildGrid() {
+  if (gridHelper) scene.remove(gridHelper);
+  gridHelper = new THREE.GridHelper(20, 20, 0x2a2d32, 0x1e2124);
+  scene.add(gridHelper);
+}
+buildGrid();
+
+// ─── DEFAULT OBJECT ───
+function addDefaultObject() {
+  const geo = new THREE.TorusKnotGeometry(0.8, 0.25, 150, 20);
+  const mat = new THREE.MeshStandardMaterial({ color: 0xb07040, roughness: 0.5, metalness: 0 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.position.y = 0.5;
+  return mesh;
+}
+currentMesh = addDefaultObject();
+scene.add(currentMesh);
+updateStats();
+
+// Ground shadow plane
+const groundGeo = new THREE.PlaneGeometry(20, 20);
+const groundMat = new THREE.ShadowMaterial({ opacity: 0.35 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ─── AMBIENT ───
+const ambLight = new THREE.AmbientLight(0xffffff, 0.15);
+scene.add(ambLight);
+
+// ─── DEFAULT LIGHTS ───
+function addLight(type = 'point', color = '#ffffff', intensity = 1.5, x = 2, y = 3, z = 2) {
+  const id = ++lightIdCounter;
+  let light;
+  if (type === 'point') {
+    light = new THREE.PointLight(color, intensity, 30);
+    light.castShadow = true;
+    light.shadow.mapSize.width = 512;
+    light.shadow.mapSize.height = 512;
+  } else if (type === 'directional') {
+    light = new THREE.DirectionalLight(color, intensity);
+    light.castShadow = true;
+    light.shadow.mapSize.width = 1024;
+    light.shadow.mapSize.height = 1024;
+    light.shadow.camera.near = 0.1;
+    light.shadow.camera.far = 50;
+    light.shadow.camera.left = -10;
+    light.shadow.camera.right = 10;
+    light.shadow.camera.top = 10;
+    light.shadow.camera.bottom = -10;
+  } else if (type === 'spot') {
+    light = new THREE.SpotLight(color, intensity, 30, Math.PI / 4, 0.3, 1);
+    light.castShadow = true;
+  }
+  light.position.set(x, y, z);
+  scene.add(light);
+
+  // Visible helper sphere
+  const helperGeo = new THREE.SphereGeometry(0.06, 8, 8);
+  const helperMat = new THREE.MeshBasicMaterial({ color });
+  const helper = new THREE.Mesh(helperGeo, helperMat);
+  helper.position.copy(light.position);
+  scene.add(helper);
+
+  lights.push({ id, light, helper, type, color, intensity });
+  lightMeshes.push(helper);
+  renderLightsUI();
+  updateStats();
+  return id;
+}
+
+addLight('directional', '#ffeecc', 1.8, 3, 4, 2);
+addLight('point', '#4f9cf9', 1.0, -2, 1.5, -2);
+
+// ─── LIGHTS UI ───
+function renderLightsUI() {
+  const container = document.getElementById('lights-container');
+  container.innerHTML = '';
+
+  lights.forEach((l, idx) => {
+    const item = document.createElement('div');
+    item.className = 'light-item';
+    item.innerHTML = `
+      <div class="light-header">
+        <div class="light-dot" style="background:${l.color}"></div>
+        <span class="light-name">${l.type.toUpperCase()} #${l.id}</span>
+        <button class="light-del" onclick="removeLight(${l.id})">✕</button>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Color</span>
+        <input type="color" value="${l.color}" onchange="setLightColor(${l.id}, this.value)" style="width:50px">
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Intensity</span>
+        <input type="range" min="0" max="500" value="${Math.round(l.intensity*100)}"
+          oninput="setLightIntensity(${l.id}, this.value/100); this.nextElementSibling.textContent=(this.value/100).toFixed(2)">
+        <span class="ctrl-value">${l.intensity.toFixed(2)}</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Pos X</span>
+        <input type="range" min="-8" max="8" value="${l.light.position.x.toFixed(1)}" step="0.1"
+          oninput="setLightPos(${l.id},'x',this.value); this.nextElementSibling.textContent=parseFloat(this.value).toFixed(1)">
+        <span class="ctrl-value">${l.light.position.x.toFixed(1)}</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Pos Y</span>
+        <input type="range" min="0" max="10" value="${l.light.position.y.toFixed(1)}" step="0.1"
+          oninput="setLightPos(${l.id},'y',this.value); this.nextElementSibling.textContent=parseFloat(this.value).toFixed(1)">
+        <span class="ctrl-value">${l.light.position.y.toFixed(1)}</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Pos Z</span>
+        <input type="range" min="-8" max="8" value="${l.light.position.z.toFixed(1)}" step="0.1"
+          oninput="setLightPos(${l.id},'z',this.value); this.nextElementSibling.textContent=parseFloat(this.value).toFixed(1)">
+        <span class="ctrl-value">${l.light.position.z.toFixed(1)}</span>
+      </div>
+    `;
+    container.appendChild(item);
+  });
+
+  const addSec = document.createElement('div');
+  addSec.style.cssText = 'display:flex;gap:4px;margin-top:4px;';
+  addSec.innerHTML = `
+    <button class="add-btn" onclick="addLight('point','#ffffff',1.5,Math.random()*4-2,2+Math.random()*2,Math.random()*4-2)">+ Point</button>
+    <button class="add-btn" onclick="addLight('directional','#ffffff',1.5,2,4,2)">+ Dir</button>
+    <button class="add-btn" onclick="addLight('spot','#ffffff',2,0,4,0)">+ Spot</button>
+  `;
+  container.appendChild(addSec);
+
+  document.getElementById('stat-lights').textContent = lights.length;
+}
+
+function removeLight(id) {
+  const idx = lights.findIndex(l => l.id === id);
+  if (idx === -1) return;
+  scene.remove(lights[idx].light);
+  scene.remove(lights[idx].helper);
+  lights.splice(idx, 1);
+  renderLightsUI();
+}
+
+function setLightColor(id, val) {
+  const l = lights.find(l => l.id === id);
+  if (!l) return;
+  l.color = val;
+  l.light.color.set(val);
+  l.helper.material.color.set(val);
+  renderLightsUI();
+}
+
+function setLightIntensity(id, val) {
+  const l = lights.find(l => l.id === id);
+  if (!l) return;
+  l.intensity = val;
+  l.light.intensity = val;
+}
+
+function setLightPos(id, axis, val) {
+  const l = lights.find(l => l.id === id);
+  if (!l) return;
+  l.light.position[axis] = parseFloat(val);
+  l.helper.position[axis] = parseFloat(val);
+}
+
+// ─── MATERIAL CONTROLS ───
+function getMaterial() {
+  if (!currentMesh) return null;
+  if (currentMesh.material) return currentMesh.material;
+  return null;
+}
+
+document.getElementById('mat-color').addEventListener('input', e => {
+  const mat = getMaterial();
+  if (!mat) return;
+  if (Array.isArray(mat)) mat.forEach(m => m.color && m.color.set(e.target.value));
+  else if (mat.color) mat.color.set(e.target.value);
+});
+
+function sliderSetup(sliderId, valueId, prop, scale = 0.01) {
+  const sl = document.getElementById(sliderId);
+  const vl = document.getElementById(valueId);
+  sl.addEventListener('input', e => {
+    const v = parseFloat(e.target.value) * scale;
+    vl.textContent = v.toFixed(2);
+    applyMatProp(prop, v);
+  });
+}
+
+function applyMatProp(prop, val) {
+  if (!currentMesh) return;
+  const applyToMat = mat => {
+    if (mat && mat[prop] !== undefined) mat[prop] = val;
+  };
+  if (Array.isArray(currentMesh.material)) currentMesh.material.forEach(applyToMat);
+  else applyToMat(currentMesh.material);
+}
+
+sliderSetup('mat-rough', 'val-rough', 'roughness', 0.01);
+sliderSetup('mat-metal', 'val-metal', 'metalness', 0.01);
+
+const emitColor = document.getElementById('mat-emit');
+const emitInt = document.getElementById('mat-emit-int');
+const valEmit = document.getElementById('val-emit');
+
+function updateEmission() {
+  const v = parseFloat(emitInt.value) / 100;
+  valEmit.textContent = v.toFixed(1);
+  const col = new THREE.Color(emitColor.value);
+  const applyEmit = mat => {
+    if (!mat) return;
+    if (mat.emissive) mat.emissive.copy(col);
+    if (mat.emissiveIntensity !== undefined) mat.emissiveIntensity = v;
+  };
+  if (!currentMesh) return;
+  if (Array.isArray(currentMesh.material)) currentMesh.material.forEach(applyEmit);
+  else applyEmit(currentMesh.material);
+}
+
+emitColor.addEventListener('input', updateEmission);
+emitInt.addEventListener('input', updateEmission);
+
+document.getElementById('mat-wire').addEventListener('input', e => {
+  const v = parseFloat(e.target.value) / 100;
+  document.getElementById('val-wire').textContent = v.toFixed(2);
+  if (!currentMesh) return;
+  const applyWire = mat => { if (mat) mat.wireframe = v > 0.5; };
+  if (Array.isArray(currentMesh.material)) currentMesh.material.forEach(applyWire);
+  else applyWire(currentMesh.material);
+});
+
+// ─── SCENE CONTROLS ───
+document.getElementById('bg-color').addEventListener('input', e => {
+  scene.background = new THREE.Color(e.target.value);
+});
+
+document.getElementById('amb-int').addEventListener('input', e => {
+  const v = parseFloat(e.target.value) / 100;
+  document.getElementById('val-amb').textContent = v.toFixed(2);
+  ambLight.intensity = v;
+});
+
+document.getElementById('show-grid').addEventListener('change', e => {
+  gridHelper.visible = e.target.checked;
+});
+
+document.getElementById('show-shadow').addEventListener('change', e => {
+  renderer.shadowMap.enabled = e.target.checked;
+  lights.forEach(l => { if (l.light.castShadow !== undefined) l.light.castShadow = e.target.checked; });
+  if (currentMesh) {
+    const set = m => { m.castShadow = e.target.checked; m.receiveShadow = e.target.checked; };
+    currentMesh.traverse(set);
+  }
+});
+
+document.getElementById('tonemap').addEventListener('change', e => {
+  const map = {
+    linear: THREE.LinearToneMapping,
+    reinhard: THREE.ReinhardToneMapping,
+    cineon: THREE.CineonToneMapping,
+    aces: THREE.ACESFilmicToneMapping
+  };
+  renderer.toneMapping = map[e.target.value] || THREE.LinearToneMapping;
+});
+
+// ─── RENDER MODES ───
+document.getElementById('btn-eevee').addEventListener('click', () => setRenderMode('eevee'));
+document.getElementById('btn-solid').addEventListener('click', () => setRenderMode('solid'));
+document.getElementById('btn-wire').addEventListener('click', () => setRenderMode('wire'));
+
+function setRenderMode(mode) {
+  renderMode = mode;
+  ['btn-eevee', 'btn-solid', 'btn-wire'].forEach(id => document.getElementById(id).classList.remove('active'));
+  document.getElementById('btn-' + (mode === 'eevee' ? 'eevee' : mode === 'solid' ? 'solid' : 'wire')).classList.add('active');
+  document.getElementById('vp-mode-tag').textContent = {
+    eevee: 'EEVEE RT — PBR',
+    solid: 'SOLID — Diffuse',
+    wire: 'WIREFRAME'
+  }[mode];
+
+  if (!currentMesh) return;
+
+  currentMesh.traverse(child => {
+    if (!child.isMesh) return;
+    if (!child._origMat) child._origMat = child.material;
+    if (mode === 'eevee') {
+      child.material = child._origMat;
+    } else if (mode === 'solid') {
+      child.material = new THREE.MeshLambertMaterial({ color: child._origMat.color || 0x888888 });
+    } else if (mode === 'wire') {
+      child.material = new THREE.MeshBasicMaterial({ color: 0x4f9cf9, wireframe: true });
+    }
+  });
+}
+
+// ─── CHANNEL DISPLAY ───
+function setChannel(ch) {
+  displayChannel = ch;
+  ['color','normal','rough','metal'].forEach(c => {
+    const el = document.getElementById('ch-' + c);
+    el.classList.toggle('active', c === ch);
+  });
+  if (!currentMesh) return;
+  currentMesh.traverse(child => {
+    if (!child.isMesh) return;
+    if (!child._origMat) child._origMat = child.material;
+    const orig = child._origMat;
+    if (ch === 'color') {
+      child.material = orig;
+    } else if (ch === 'normal') {
+      // Show normal as color
+      child.material = new THREE.MeshNormalMaterial();
+    } else if (ch === 'rough') {
+      const r = orig.roughness !== undefined ? orig.roughness : 0.5;
+      child.material = new THREE.MeshBasicMaterial({ color: new THREE.Color(r, r, r) });
+    } else if (ch === 'metal') {
+      const m = orig.metalness !== undefined ? orig.metalness : 0;
+      child.material = new THREE.MeshBasicMaterial({ color: new THREE.Color(m, m, m) });
+    }
+  });
+}
+
+// ─── FILE IMPORT ───
+const fileInput = document.getElementById('file-input');
+const importZone = document.getElementById('import-zone');
+const loading = document.getElementById('loading');
+
+fileInput.addEventListener('change', e => loadFile(e.target.files[0]));
+
+importZone.addEventListener('dragover', e => { e.preventDefault(); importZone.classList.add('drag-over'); });
+importZone.addEventListener('dragleave', () => importZone.classList.remove('drag-over'));
+importZone.addEventListener('drop', e => {
+  e.preventDefault();
+  importZone.classList.remove('drag-over');
+  loadFile(e.dataTransfer.files[0]);
+});
+
+function loadFile(file) {
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  loading.style.display = 'flex';
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    const contents = e.target.result;
+    try {
+      if (ext === 'obj') loadOBJ(contents);
+      else if (ext === 'stl') loadSTL(e.target.result);
+      else if (ext === 'gltf' || ext === 'glb') loadGLTF(contents, file);
+      else if (ext === 'ply') loadPLY(contents);
+      else alert('Format not supported: ' + ext);
+    } catch(err) {
+      loading.style.display = 'none';
+      alert('Error loading: ' + err.message);
+    }
+  };
+
+  if (ext === 'stl' || ext === 'glb' || ext === 'ply') reader.readAsArrayBuffer(file);
+  else reader.readAsText(file);
+}
+
+// ─── OBJ LOADER ───
+function loadOBJ(text) {
+  const geometry = parseOBJ(text);
+  const mat = new THREE.MeshStandardMaterial({
+    color: parseInt(document.getElementById('mat-color').value.replace('#',''), 16),
+    roughness: parseFloat(document.getElementById('mat-rough').value) / 100,
+    metalness: parseFloat(document.getElementById('mat-metal').value) / 100
+  });
+  const mesh = new THREE.Mesh(geometry, mat);
+  finishLoad(mesh);
+}
+
+function parseOBJ(text) {
+  const positions = [], normals = [], uvs = [];
+  const posI = [], normI = [], uvI = [];
+
+  text.split('\n').forEach(line => {
+    line = line.trim();
+    if (line.startsWith('v ')) {
+      const p = line.split(/\s+/);
+      positions.push(parseFloat(p[1]), parseFloat(p[2]), parseFloat(p[3]));
+    } else if (line.startsWith('vn ')) {
+      const p = line.split(/\s+/);
+      normals.push(parseFloat(p[1]), parseFloat(p[2]), parseFloat(p[3]));
+    } else if (line.startsWith('vt ')) {
+      const p = line.split(/\s+/);
+      uvs.push(parseFloat(p[1]), parseFloat(p[2]));
+    } else if (line.startsWith('f ')) {
+      const verts = line.split(/\s+/).slice(1);
+      // Triangulate fan
+      for (let i = 1; i < verts.length - 1; i++) {
+        [verts[0], verts[i], verts[i+1]].forEach(v => {
+          const parts = v.split('/');
+          const pi = parseInt(parts[0]) - 1;
+          const ui = parts[1] ? parseInt(parts[1]) - 1 : -1;
+          const ni = parts[2] ? parseInt(parts[2]) - 1 : -1;
+          posI.push(pi);
+          uvI.push(ui);
+          normI.push(ni);
+        });
+      }
+    }
+  });
+
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(posI.length * 3);
+  const norm = new Float32Array(posI.length * 3);
+  const uv = new Float32Array(posI.length * 2);
+
+  for (let i = 0; i < posI.length; i++) {
+    pos[i*3] = positions[posI[i]*3];
+    pos[i*3+1] = positions[posI[i]*3+1];
+    pos[i*3+2] = positions[posI[i]*3+2];
+    if (normI[i] >= 0 && normals.length > 0) {
+      norm[i*3] = normals[normI[i]*3];
+      norm[i*3+1] = normals[normI[i]*3+1];
+      norm[i*3+2] = normals[normI[i]*3+2];
+    }
+    if (uvI[i] >= 0 && uvs.length > 0) {
+      uv[i*2] = uvs[uvI[i]*2];
+      uv[i*2+1] = uvs[uvI[i]*2+1];
+    }
+  }
+
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  if (normals.length > 0) geo.setAttribute('normal', new THREE.BufferAttribute(norm, 3));
+  else geo.computeVertexNormals();
+  if (uvs.length > 0) geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+
+  return geo;
+}
+
+// ─── STL LOADER ───
+function loadSTL(buffer) {
+  const geo = parseSTL(buffer);
+  const mat = new THREE.MeshStandardMaterial({
+    color: parseInt(document.getElementById('mat-color').value.replace('#',''), 16),
+    roughness: parseFloat(document.getElementById('mat-rough').value) / 100,
+    metalness: parseFloat(document.getElementById('mat-metal').value) / 100
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  finishLoad(mesh);
+}
+
+function parseSTL(buffer) {
+  // Check if binary or ASCII
+  const header = new Uint8Array(buffer, 0, 80);
+  const text = new TextDecoder().decode(header);
+  const triCount = new DataView(buffer).getUint32(80, true);
+  const expectedSize = 84 + triCount * 50;
+
+  if (buffer.byteLength === expectedSize || (!text.trim().startsWith('solid') && triCount > 0)) {
+    // Binary
+    const view = new DataView(buffer);
+    const count = view.getUint32(80, true);
+    const pos = new Float32Array(count * 9);
+    const norm = new Float32Array(count * 9);
+    for (let i = 0; i < count; i++) {
+      const off = 84 + i * 50;
+      const nx = view.getFloat32(off, true);
+      const ny = view.getFloat32(off+4, true);
+      const nz = view.getFloat32(off+8, true);
+      for (let j = 0; j < 3; j++) {
+        const voff = off + 12 + j * 12;
+        pos[(i*3+j)*3] = view.getFloat32(voff, true);
+        pos[(i*3+j)*3+1] = view.getFloat32(voff+4, true);
+        pos[(i*3+j)*3+2] = view.getFloat32(voff+8, true);
+        norm[(i*3+j)*3] = nx;
+        norm[(i*3+j)*3+1] = ny;
+        norm[(i*3+j)*3+2] = nz;
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(norm, 3));
+    return geo;
+  } else {
+    // ASCII
+    const txt = new TextDecoder().decode(buffer);
+    return parseSTLAscii(txt);
+  }
+}
+
+function parseSTLAscii(text) {
+  const pos = [];
+  const lines = text.split('\n');
+  let n = [0,0,0];
+  lines.forEach(line => {
+    line = line.trim();
+    if (line.startsWith('facet normal')) {
+      const p = line.split(/\s+/);
+      n = [parseFloat(p[2]), parseFloat(p[3]), parseFloat(p[4])];
+    } else if (line.startsWith('vertex')) {
+      const p = line.split(/\s+/);
+      pos.push(parseFloat(p[1]), parseFloat(p[2]), parseFloat(p[3]));
+    }
+  });
+  const arr = new Float32Array(pos);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// ─── PLY LOADER (basic ASCII) ───
+function loadPLY(buffer) {
+  const text = new TextDecoder().decode(buffer);
+  const geo = parsePLY(text, buffer);
+  const mat = new THREE.MeshStandardMaterial({
+    color: parseInt(document.getElementById('mat-color').value.replace('#',''), 16),
+    roughness: parseFloat(document.getElementById('mat-rough').value) / 100,
+    metalness: parseFloat(document.getElementById('mat-metal').value) / 100
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  finishLoad(mesh);
+}
+
+function parsePLY(text, buffer) {
+  const lines = text.split('\n');
+  let vCount = 0, fCount = 0, headerEnd = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].trim();
+    if (l.startsWith('element vertex')) vCount = parseInt(l.split(' ')[2]);
+    if (l.startsWith('element face')) fCount = parseInt(l.split(' ')[2]);
+    if (l === 'end_header') { headerEnd = i + 1; break; }
+  }
+  const pos = [];
+  for (let i = headerEnd; i < headerEnd + vCount; i++) {
+    const parts = lines[i].trim().split(/\s+/);
+    pos.push(parseFloat(parts[0]), parseFloat(parts[1]), parseFloat(parts[2]));
+  }
+  const idx = [];
+  for (let i = headerEnd + vCount; i < headerEnd + vCount + fCount; i++) {
+    const parts = lines[i].trim().split(/\s+/).map(Number);
+    const n = parts[0];
+    for (let j = 1; j < n - 1; j++) {
+      idx.push(parts[1], parts[j+1], parts[j+2]);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+  if (idx.length > 0) geo.setIndex(idx);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// ─── GLTF LOADER ───
+function loadGLTF(contents, file) {
+  // Simple approach: use blob URL
+  const url = URL.createObjectURL(file);
+  // We'll use a basic fetch approach since we don't have the full GLTFLoader
+  // Load using Three.js r128's inline loader approach
+  loadGLTFFromURL(url);
+}
+
+// We need to dynamically load GLTFLoader
+function loadGLTFFromURL(url) {
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
+  script.onload = () => {
+    const loader = new THREE.GLTFLoader();
+    loader.load(url, gltf => {
+      const group = gltf.scene;
+      group.traverse(child => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          if (!child.material.roughness) child.material.roughness = 0.5;
+          child._origMat = child.material;
+        }
+      });
+      finishLoad(group, true);
+      URL.revokeObjectURL(url);
+    }, undefined, err => {
+      loading.style.display = 'none';
+      alert('GLTF error: ' + err.message);
+    });
+  };
+  document.head.appendChild(script);
+}
+
+// ─── FINISH LOAD ───
+function finishLoad(obj, isGroup = false) {
+  if (currentMesh) scene.remove(currentMesh);
+
+  // Center & scale
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const scale = 2.0 / maxDim;
+  obj.scale.setScalar(scale);
+  obj.position.sub(center.multiplyScalar(scale));
+  obj.position.y += size.y * scale / 2;
+
+  if (!isGroup) {
+    obj.castShadow = true;
+    obj.receiveShadow = true;
+    obj._origMat = obj.material;
+  }
+
+  scene.add(obj);
+  currentMesh = obj;
+
+  // Apply current material settings
+  syncMaterialFromUI();
+  updateStats();
+  setRenderMode(renderMode);
+
+  loading.style.display = 'none';
+}
+
+function syncMaterialFromUI() {
+  if (!currentMesh) return;
+  const color = new THREE.Color(document.getElementById('mat-color').value);
+  const rough = parseFloat(document.getElementById('mat-rough').value) / 100;
+  const metal = parseFloat(document.getElementById('mat-metal').value) / 100;
+
+  currentMesh.traverse(child => {
+    if (!child.isMesh) return;
+    if (child.material instanceof THREE.MeshStandardMaterial ||
+        child.material instanceof THREE.MeshPhysicalMaterial) {
+      // Keep existing material properties
+    } else {
+      child.material = new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
+      child._origMat = child.material;
+    }
+  });
+}
+
+// ─── STATS ───
+function updateStats() {
+  if (!currentMesh) return;
+  let tris = 0, verts = 0;
+  currentMesh.traverse(child => {
+    if (!child.isMesh || !child.geometry) return;
+    const geo = child.geometry;
+    if (geo.index) {
+      tris += geo.index.count / 3;
+      verts += geo.attributes.position.count;
+    } else if (geo.attributes.position) {
+      tris += geo.attributes.position.count / 3;
+      verts += geo.attributes.position.count;
+    }
+  });
+  document.getElementById('stat-tris').textContent = tris > 1000 ? (tris/1000).toFixed(1)+'K' : tris;
+  document.getElementById('stat-verts').textContent = verts > 1000 ? (verts/1000).toFixed(1)+'K' : verts;
+}
+
+// ─── CAMERA HELPERS ───
+function resetCamera() {
+  camTheta = 0.8; camPhi = 0.5; camRadius = 5;
+  camTarget.set(0, 0, 0);
+  updateCamera();
+}
+
+function focusObject() {
+  if (!currentMesh) return;
+  const box = new THREE.Box3().setFromObject(currentMesh);
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  camTarget.copy(center);
+  camRadius = Math.max(size.x, size.y, size.z) * 2.5;
+  updateCamera();
+}
+
+function toggleOrthographic() {
+  isOrthographic = !isOrthographic;
+  document.getElementById('ortho-btn').classList.toggle('active', isOrthographic);
+  if (isOrthographic) {
+    const aspect = W() / H();
+    const frustum = camRadius * 0.8;
+    camera = new THREE.OrthographicCamera(-frustum * aspect, frustum * aspect, frustum, -frustum, 0.01, 1000);
+    camera.position.copy(perspCamera.position);
+    camera.lookAt(camTarget);
+  } else {
+    camera = perspCamera;
+    updateCamera();
+  }
+}
+
+// ─── RESIZE ───
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  renderer.setSize(w, h, false);
+  perspCamera.aspect = w / h;
+  perspCamera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(canvas.parentElement);
+resize();
+
+// ─── RENDER LOOP ───
+function animate() {
+  animId = requestAnimationFrame(animate);
+
+  // Slowly rotate object
+  // (commented to not interfere with user)
+
+  // FPS
+  frameCount++;
+  const now = performance.now();
+  if (now - lastTime > 500) {
+    const fps = Math.round(frameCount * 1000 / (now - lastTime));
+    document.getElementById('stat-fps').textContent = fps;
+    frameCount = 0;
+    lastTime = now;
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+
+// ─── SECTION TOGGLE ───
+function toggleSection(header) {
+  const arrow = header.querySelector('.section-arrow');
+  const body = header.nextElementSibling;
+  if (!body) return;
+  const isOpen = !body.classList.contains('collapsed');
+  body.classList.toggle('collapsed', isOpen);
+  arrow.classList.toggle('open', !isOpen);
+}
+
+</script>
+</body>
+</html>
